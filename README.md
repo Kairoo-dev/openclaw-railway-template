@@ -17,7 +17,7 @@
 
 - The container runs a wrapper web server.
 - The wrapper protects `/setup` with `SETUP_PASSWORD`.
-- During setup, the wrapper runs `openclaw onboard ...` inside the container, writes state to the volume, and then starts the gateway. API-key providers use non-interactive setup; ChatGPT/Codex device pairing uses OpenClaw's interactive device-code flow so the login URL and code can be streamed to `/setup`.
+- During setup, the wrapper runs `openclaw onboard ...` inside the container, writes state to the volume, and then starts the gateway. API-key providers use non-interactive setup; ChatGPT/Codex and xAI/Grok device pairing use OpenClaw's interactive device-code flows so the login URL and code can be streamed to `/setup`.
 - After setup, **`/` is OpenClaw**. The wrapper reverse-proxies all traffic (including WebSockets) to the local gateway process.
 
 ## Getting chat tokens (so you don't have to scramble)
@@ -27,6 +27,12 @@
 In `/setup`, choose **OpenAI → OpenAI Codex device pairing**. Setup will stream a ChatGPT/Codex URL and a short device code; open the URL in your browser, enter the code, and keep the setup page open until OpenClaw finishes saving the OAuth profile.
 
 This uses OpenClaw's `openai-codex-device-code` onboarding flow, so you do not need to paste an OpenAI API key.
+
+### Grok / xAI subscription login
+
+In `/setup`, choose **xAI (Grok) → xAI device code**. Setup will stream an xAI URL and a short device code; open the URL in your browser, enter the code, and keep the setup page open until OpenClaw finishes saving the OAuth profile.
+
+This uses OpenClaw's `xai-device-code` onboarding flow, so you can use an eligible SuperGrok or X Premium subscription without pasting an xAI API key.
 
 ### Telegram bot token
 

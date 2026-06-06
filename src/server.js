@@ -681,8 +681,15 @@ app.get("/setup/api/status", requireSetupAuth, async (_req, res) => {
     {
       value: "xai",
       label: "xAI (Grok)",
-      hint: "API key",
-      options: [{ value: "xai-api-key", label: "xAI API key" }],
+      hint: "API key / device code",
+      options: [
+        { value: "xai-api-key", label: "xAI API key" },
+        {
+          value: "xai-device-code",
+          label: "xAI device code",
+          hint: "SuperGrok or X Premium login without an API key",
+        },
+      ],
     },
     {
       value: "mistral",
@@ -874,7 +881,15 @@ app.get("/setup/api/status", requireSetupAuth, async (_req, res) => {
 });
 
 function requiresInteractiveOnboarding(payload) {
-  return payload.authChoice === "openai-codex-device-code";
+  return [
+    "openai-codex-device-code",
+    "xai-device-code",
+  ].includes(payload.authChoice);
+}
+
+function interactiveOnboardingLabel(payload) {
+  if (payload.authChoice === "xai-device-code") return "xAI device code";
+  return "OpenAI Codex device pairing";
 }
 
 function buildOnboardArgs(payload) {
@@ -1070,6 +1085,7 @@ const VALID_AUTH_CHOICES = [
   "deepseek-api-key",
   "openrouter-api-key",
   "xai-api-key",
+  "xai-device-code",
   "mistral-api-key",
   "together-api-key",
   "huggingface-api-key",
@@ -1171,7 +1187,7 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
     const interactive = requiresInteractiveOnboarding(payload);
     stream(
       interactive
-        ? "Starting OpenAI Codex device pairing. Use the URL and code below, then keep this page open until it completes.\n\n"
+        ? `Starting ${interactiveOnboardingLabel(payload)}. Use the URL and code below, then keep this page open until it completes.\n\n`
         : "Starting OpenClaw onboarding...\n\n",
     );
 

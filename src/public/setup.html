@@ -31,6 +31,7 @@
       log: '',
       loginUrl: '',
       loginCode: '',
+      loginLabel: 'Device Login',
       setupError: '',
       setupStreamTail: '',
       loading: false,
@@ -62,6 +63,7 @@
         return ![
           'openai-codex',
           'openai-codex-device-code',
+          'xai-device-code',
           'google-gemini-cli',
           'github-copilot',
           'ollama',
@@ -73,6 +75,9 @@
       get authGuidance() {
         if (this.selectedAuth === 'openai-codex-device-code') {
           return 'Run setup, then open the ChatGPT/Codex URL and enter the device code shown in the log.';
+        }
+        if (this.selectedAuth === 'xai-device-code') {
+          return 'Run setup, then open the xAI URL and enter the device code shown in the log. Use an eligible SuperGrok or X Premium account.';
         }
         if (this.selectedAuth === 'openai-codex') {
           return 'Browser login needs an interactive terminal to paste the redirect URL. Device pairing is recommended here.';
@@ -136,6 +141,7 @@
       async runSetup() {
         this.loginUrl = '';
         this.loginCode = '';
+        this.loginLabel = this.loginLabelForAuth(this.selectedAuth);
         this.setupError = '';
         this.setupStreamTail = '';
         const payload = {
@@ -201,12 +207,21 @@
       },
 
       extractLoginDetails(text) {
-        const urlMatch = text.match(/https:\/\/auth\.openai\.com\/codex\/device[^\s)]*/);
+        const urlMatch = text.match(/https:\/\/auth\.openai\.com\/codex\/device[^\s)]*/)
+          || text.match(/\bURL:\s*(https:\/\/(?:auth|accounts)\.x\.ai\/[^\s)]*)/)
+          || text.match(/\bOpen(?: manually)?:\s*(https:\/\/(?:auth|accounts)\.x\.ai\/[^\s)]*)/);
         if (urlMatch) this.loginUrl = urlMatch[0];
+        if (urlMatch && urlMatch[1]) this.loginUrl = urlMatch[1];
 
         const codeMatches = [...text.matchAll(/\bCode:\s*([A-Z0-9][A-Z0-9-]{3,})\b/g)];
         const visibleCode = codeMatches.map(m => m[1]).find(code => code !== 'shown');
         if (visibleCode) this.loginCode = visibleCode;
+      },
+
+      loginLabelForAuth(auth) {
+        if (auth === 'xai-device-code') return 'xAI Login';
+        if (auth === 'openai-codex-device-code') return 'ChatGPT Login';
+        return 'Device Login';
       },
 
       extractSetupFailure(text) {
@@ -743,7 +758,7 @@
 
           <div class="form-group">
             <label class="label">Model</label>
-            <input x-model="model" type="text" placeholder="e.g. openai-codex/gpt-5.5, openai/gpt-4.1" class="input" />
+            <input x-model="model" type="text" placeholder="e.g. xai/grok-4.3, openai-codex/gpt-5.5, openai/gpt-4.1" class="input" />
             <p class="form-hint">Format: provider/model-name</p>
           </div>
         </div>
@@ -842,7 +857,7 @@
 
           <div x-show="loginUrl || loginCode" class="login-code-panel">
             <div>
-              <p class="login-code-label">ChatGPT Login</p>
+              <p class="login-code-label" x-text="loginLabel"></p>
               <a x-show="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer" class="login-code-url" x-text="loginUrl"></a>
             </div>
             <div x-show="loginCode" class="login-code-value" x-text="loginCode"></div>
