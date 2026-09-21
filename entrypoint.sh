@@ -11,5 +11,4 @@ fi
 rm -rf /home/linuxbrew/.linuxbrew
 ln -sfn /data/.linuxbrew /home/linuxbrew/.linuxbrew
 
-npm install -g openclaw@latest
 exec gosu openclaw node src/server.js
