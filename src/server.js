@@ -12,6 +12,13 @@ import {
   canServeGatewayRequest,
   describeGatewayHealth,
 } from "./gateway-readiness.js";
+import {
+  AUTH_COOKIE,
+  AUTH_COOKIE_MAX_AGE_MS,
+  denyPage,
+  isAuthorized,
+  issueCookieValue,
+} from "./wrapper-auth.js";
 
 const PORT = Number.parseInt(process.env.PORT ?? "8080", 10);
 const STATE_DIR =
@@ -96,6 +103,10 @@ function resolveGatewayToken() {
 
 const OPENCLAW_GATEWAY_TOKEN = resolveGatewayToken();
 process.env.OPENCLAW_GATEWAY_TOKEN = OPENCLAW_GATEWAY_TOKEN;
+
+// Per-boot salt for the wrapper's session cookie. Restarting invalidates every
+// issued cookie; the token itself is never written into the cookie.
+const WRAPPER_AUTH_SALT = crypto.randomBytes(32).toString("hex");
 
 let cachedOpenclawVersion = null;
 
@@ -1792,10 +1803,25 @@ app.use(async (req, res) => {
     }
   }
 
-  if (req.path === "/openclaw" && !req.query.token) {
-    return res.redirect(`/openclaw?token=${OPENCLAW_GATEWAY_TOKEN}`);
+  // Hook endpoints are called by external services that hold their own secret;
+  // the wrapper has never added gateway auth to them, so keep them exempt.
+  if (!req.path.startsWith("/hooks/")) {
+    const auth = isAuthorized(req, OPENCLAW_GATEWAY_TOKEN, WRAPPER_AUTH_SALT);
+    if (!auth.ok) {
+      log.warn("proxy-auth", `denied ${req.method} ${req.path} (${auth.reason})`);
+      res.status(401).type("html").send(denyPage());
+      return;
+    }
+    if (auth.needsCookie) {
+      res.cookie(AUTH_COOKIE, issueCookieValue(OPENCLAW_GATEWAY_TOKEN, WRAPPER_AUTH_SALT), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: Boolean(process.env.RAILWAY_PUBLIC_DOMAIN),
+        path: "/",
+        maxAge: AUTH_COOKIE_MAX_AGE_MS,
+      });
+    }
   }
-
   return proxy.web(req, res, { target: GATEWAY_TARGET });
 });
 
@@ -1826,6 +1852,25 @@ server.on("upgrade", async (req, socket, head) => {
   if (!isConfigured()) {
     socket.destroy();
     return;
+  }
+  if (!req.url?.startsWith("/hooks/")) {
+    // Raw upgrade requests skip express, so req.query is undefined here.
+    let query = Object.create(null);
+    try {
+      const parsed = new URL(req.url ?? "/", "http://wrapper.invalid");
+      query = Object.fromEntries(parsed.searchParams);
+    } catch {}
+    const auth = isAuthorized(
+      { query, headers: req.headers },
+      OPENCLAW_GATEWAY_TOKEN,
+      WRAPPER_AUTH_SALT,
+    );
+    if (!auth.ok) {
+      log.warn("websocket-auth", `denied upgrade ${req.url} (${auth.reason})`);
+      socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
   }
   try {
     await ensureGatewayRunning();
